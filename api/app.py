@@ -137,7 +137,10 @@ def telegram(
             {"configurable": {"thread_id": str(chat_id)}},
         )
         respuesta = result["respuesta"]
-        logger.info("Telegram chat_id=%s ruta=%s motivo=%s", chat_id, result["ruta"], result["motivo"])
+        print(
+            f"Telegram chat_id={chat_id} ruta={result['ruta']} motivo={result['motivo']}",
+            flush=True,
+        )
     except Exception:
         logger.exception("Error al ejecutar el grafo para Telegram chat_id=%s", chat_id)
         respuesta = "No pude procesar tu mensaje en este momento. Intenta nuevamente más tarde."
