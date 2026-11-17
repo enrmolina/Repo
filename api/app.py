@@ -14,6 +14,7 @@ from src.router.graph import GRAPH
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 app = FastAPI(
     title="Ecommerce Router API",
