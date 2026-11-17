@@ -3,8 +3,9 @@ import os
 import secrets
 from typing import Any, Literal
 
+import httpx
 from dotenv import load_dotenv
-from fastapi import Body, Depends, FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, Header, HTTPException
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
@@ -114,5 +115,45 @@ def chat(payload: ChatRequest, _: str = Depends(require_api_key)) -> ChatRespons
 
 
 @app.post("/telegram", tags=["telegram"], include_in_schema=False)
-def telegram(_: Any = Body(...)) -> dict[str, bool]:
+def telegram(
+    update: Any = Body(...),
+    secret_token: str | None = Header(default=None, alias="X-Telegram-Bot-Api-Secret-Token"),
+) -> dict[str, bool]:
+    configured_secret = os.getenv("TELEGRAM_SECRET", "")
+    if not configured_secret or not secret_token or not secrets.compare_digest(secret_token, configured_secret):
+        raise HTTPException(status_code=403, detail="Secreto de Telegram inválido")
+
+    message = update.get("message", {}) if isinstance(update, dict) else {}
+    chat = message.get("chat", {}) if isinstance(message, dict) else {}
+    chat_id = chat.get("id") if isinstance(chat, dict) else None
+    texto = message.get("text") if isinstance(message, dict) else None
+    if chat_id is None or not isinstance(texto, str) or not texto.strip():
+        return {"ok": True}
+
+    try:
+        result = GRAPH.invoke(
+            {"mensaje": texto},
+            {"configurable": {"thread_id": str(chat_id)}},
+        )
+        respuesta = result["respuesta"]
+        logger.info("Telegram chat_id=%s ruta=%s motivo=%s", chat_id, result["ruta"], result["motivo"])
+    except Exception:
+        logger.exception("Error al ejecutar el grafo para Telegram chat_id=%s", chat_id)
+        respuesta = "No pude procesar tu mensaje en este momento. Intenta nuevamente más tarde."
+
+    token = os.getenv("TELEGRAM_TOKEN", "")
+    if not token:
+        logger.error("TELEGRAM_TOKEN no está configurado; no se pudo responder a chat_id=%s", chat_id)
+        return {"ok": True}
+
+    try:
+        telegram_response = httpx.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": respuesta},
+            timeout=20.0,
+        )
+        telegram_response.raise_for_status()
+    except Exception:
+        logger.exception("Error al enviar respuesta de Telegram a chat_id=%s", chat_id)
+
     return {"ok": True}

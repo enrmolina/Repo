@@ -113,29 +113,74 @@ El proceso web ejecuta exactamente:
 web: uvicorn api.app:app --host 0.0.0.0 --port $PORT
 ```
 
-## Conectar Telegram
+## Telegram
 
-1. En Telegram, abre `@BotFather`, ejecuta `/newbot` y guarda el token en
-   `TELEGRAM_TOKEN`.
-2. Configura `TELEGRAM_SECRET` y `PUBLIC_URL` como variables locales o Config
-   Vars de Heroku.
-3. Registra el webhook apuntando a la API pública:
+Primero, en Telegram abre `@BotFather`, ejecuta `/newbot`, copia el token y
+elige un secreto propio. No compartas ninguno de los dos valores.
 
-```bash
-curl -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook" \
-  -d "url=${PUBLIC_URL}/telegram" \
-  -d "secret_token=${TELEGRAM_SECRET}"
-```
+El endpoint `/telegram` usa solo `httpx`, valida la cabecera
+`X-Telegram-Bot-Api-Secret-Token`, enruta el texto por `chat_id` y responde con
+`sendMessage`. Los updates sin texto se ignoran.
 
-4. Consulta el webhook configurado:
+Sigue estos pasos en orden:
+
+1. Configura el token y el secreto en Heroku:
 
 ```bash
-curl "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo"
+heroku config:set TELEGRAM_TOKEN="tu-token-de-BotFather" TELEGRAM_SECRET="tu-secreto" --app NOMBRE_DE_TU_APP
 ```
 
-El endpoint `/telegram` está creado como receptor provisional y actualmente
-responde `{"ok":true}` a cualquier JSON. La validación del `secret_token` y el
-procesamiento de mensajes de Telegram se completarán en la parte 5.
+2. Haz commit y publica los cambios en GitHub y Heroku:
+
+```bash
+git add api/app.py scripts/set_webhook.py scripts/webhook_info.py README.md
+git commit -m "conecta Telegram al router"
+git push origin main
+git push heroku main
+```
+
+3. Con `PUBLIC_URL` apuntando a Heroku, registra y verifica el webhook:
+
+```bash
+python scripts/set_webhook.py
+python scripts/webhook_info.py
+```
+
+La URL registrada será `PUBLIC_URL/telegram`. `getWebhookInfo` muestra la URL,
+la fecha de la última sincronización y los errores pendientes.
+
+4. Escribe al bot estos seis mensajes y observa la ruta en los logs:
+
+```text
+¿tienen la polera azul en talla M?
+mi pedido 4521 llegó roto
+hola
+¿cuánto cuesta el envío a Valparaíso?
+quiero devolver unas zapatillas
+¿qué hora es en Tokio?
+```
+
+```bash
+heroku logs --tail --app NOMBRE_DE_TU_APP
+```
+
+5. Si no responde, revisa que:
+
+- el webhook apunte a `https://.../telegram`, no a HTTP ni a la raíz;
+- `TELEGRAM_SECRET` sea idéntico en Heroku y en el webhook;
+- `TELEGRAM_TOKEN` sea el token correcto de BotFather;
+- el dyno web esté activo y los logs no muestren errores.
+
+### Probar antes de desplegar (opcional)
+
+Con la API local levantada, crea un túnel público:
+
+```bash
+cloudflared tunnel --url http://localhost:8000
+```
+
+Usa la URL HTTPS que entregue Cloudflared como `PUBLIC_URL` y ejecuta los dos
+scripts del paso 3.
 
 ## Bruno
 

@@ -41,7 +41,6 @@ class RouterState(TypedDict, total=False):
 def _model() -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
         model=os.getenv("MODELO", "gemini-3.5-flash-lite"),
-        temperature=0,
     )
 
 
